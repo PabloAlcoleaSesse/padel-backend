@@ -1,4 +1,17 @@
 services:
+  api:
+    build: .
+    container_name: padel-api
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-padel}:${POSTGRES_PASSWORD:-padel_password}@postgres:5432/${POSTGRES_DB:-padel}?sslmode=disable
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     container_name: padel-postgres

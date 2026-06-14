@@ -28,9 +28,9 @@ go run .
 
 The API listens on `PORT` or `8080` by default.
 
-## Docker PostgreSQL Setup
+## Docker Setup
 
-For a home server, run PostgreSQL in Docker and point the API at it.
+For a home server, run the Go API and PostgreSQL together with Docker Compose.
 
 1. Create a Docker env file:
 
@@ -40,33 +40,34 @@ cp .env.docker.example .env.docker
 
 Edit `.env.docker` and change `POSTGRES_PASSWORD`.
 
-2. Start PostgreSQL:
+2. Start the backend and PostgreSQL:
 
 ```bash
 docker compose --env-file .env.docker up -d
 ```
 
-On first startup, Docker automatically applies `schema.sql` through `/docker-entrypoint-initdb.d`.
+The API will be available at:
 
-3. Run the API against Docker PostgreSQL:
-
-```bash
-export DATABASE_URL='postgresql://padel:YOUR_PASSWORD@localhost:5432/padel?sslmode=disable'
-go run .
+```text
+http://localhost:8080/health
 ```
 
-If the API is also running in Docker on the same Compose network, use host `postgres` instead of `localhost`:
+On first database startup, Docker automatically applies `schema.sql` through `/docker-entrypoint-initdb.d`.
+
+The API container uses this internal database URL:
 
 ```text
 postgresql://padel:YOUR_PASSWORD@postgres:5432/padel?sslmode=disable
 ```
 
-Useful database commands:
+Useful Docker commands:
 
 ```bash
 docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs api
 docker compose --env-file .env.docker logs postgres
 docker compose --env-file .env.docker exec postgres psql -U padel -d padel
+docker compose --env-file .env.docker down
 ```
 
 ## Endpoints
