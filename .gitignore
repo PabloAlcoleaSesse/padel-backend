@@ -1,2 +1,8 @@
 .env
 .env.docker
+node_modules/
+dist/
+.astro/
+web/node_modules/
+web/dist/
+web/.astro/

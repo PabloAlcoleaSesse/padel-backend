@@ -1,6 +1,6 @@
 # Padel Tournament Backend
 
-Go API for a 12-player mixed-pair padel tournament using PostgreSQL/Neon.
+Go API for a 10-player mixed-pair padel tournament using PostgreSQL/Neon.
 
 ## Neon Setup
 
@@ -126,13 +126,13 @@ curl -X POST http://localhost:8080/matches/MATCH_ID/result \
 
 ## Tournament Rules
 
-- Exactly 6 available male and 6 available female players are required.
-- Players are shuffled into 6 mixed pairs.
-- Pairs are split into Group A and Group B.
-- Each group plays a 3-pair round robin.
-- Top 2 pairs per group qualify.
-- Semifinal 1: Group A 1st vs Group B 2nd.
-- Semifinal 2: Group B 1st vs Group A 2nd.
+- Exactly 5 available male and 5 available female players are required.
+- Players are shuffled into 5 mixed pairs.
+- All pairs are assigned to one group.
+- The group plays a 5-pair round robin, 10 matches total.
+- Top 4 pairs qualify.
+- Semifinal 1: 1st vs 4th.
+- Semifinal 2: 2nd vs 3rd.
 - Final: semifinal winners.
 
 Group rankings are sorted by points, set difference, game difference, sets won, then games won.

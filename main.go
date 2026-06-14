@@ -22,6 +22,12 @@ type app struct {
 	db *pgxpool.Pool
 }
 
+const (
+	tournamentPairs       = 5
+	tournamentGroupName   = "Group A"
+	semifinalistsRequired = 4
+)
+
 type player struct {
 	ID          string    `json:"id"`
 	FirstName   string    `json:"first_name"`
@@ -297,8 +303,8 @@ func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
 			females = append(females, p)
 		}
 	}
-	if len(males) != 6 || len(females) != 6 {
-		writeError(w, http.StatusBadRequest, "tournament requires exactly 6 available male players and 6 available female players")
+	if len(males) != tournamentPairs || len(females) != tournamentPairs {
+		writeError(w, http.StatusBadRequest, "tournament requires exactly 5 available male players and 5 available female players")
 		return
 	}
 
@@ -332,18 +338,13 @@ func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groupAID, err := upsertGroup(ctx, tx, "Group A")
+	groupAID, err := upsertGroup(ctx, tx, tournamentGroupName)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create Group A")
-		return
-	}
-	groupBID, err := upsertGroup(ctx, tx, "Group B")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create Group B")
+		writeError(w, http.StatusInternalServerError, "failed to create group")
 		return
 	}
 
-	pairs := make([]pair, 0, 6)
+	pairs := make([]pair, 0, tournamentPairs)
 	for i := range males {
 		name := pairName(males[i], females[i])
 		var pr pair
@@ -364,25 +365,20 @@ func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groupIDs := []string{groupAID, groupAID, groupAID, groupBID, groupBID, groupBID}
-	for i, pr := range pairs {
-		if _, err := tx.Exec(ctx, `insert into group_pairs (group_id, pair_id) values ($1, $2)`, groupIDs[i], pr.ID); err != nil {
+	for _, pr := range pairs {
+		if _, err := tx.Exec(ctx, `insert into group_pairs (group_id, pair_id) values ($1, $2)`, groupAID, pr.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to assign pair to group")
 			return
 		}
-		if _, err := tx.Exec(ctx, `insert into group_standings (group_id, pair_id) values ($1, $2)`, groupIDs[i], pr.ID); err != nil {
+		if _, err := tx.Exec(ctx, `insert into group_standings (group_id, pair_id) values ($1, $2)`, groupAID, pr.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to create standings")
 			return
 		}
 	}
 
-	createdMatches := make([]match, 0, 6)
-	if err := createGroupMatches(ctx, tx, groupAID, pairs[:3], &createdMatches); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create Group A matches")
-		return
-	}
-	if err := createGroupMatches(ctx, tx, groupBID, pairs[3:], &createdMatches); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create Group B matches")
+	createdMatches := make([]match, 0, tournamentPairs*(tournamentPairs-1)/2)
+	if err := createGroupMatches(ctx, tx, groupAID, pairs, &createdMatches); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create group matches")
 		return
 	}
 
@@ -392,7 +388,7 @@ func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"groups":  []map[string]string{{"id": groupAID, "name": "Group A"}, {"id": groupBID, "name": "Group B"}},
+		"groups":  []map[string]string{{"id": groupAID, "name": tournamentGroupName}},
 		"pairs":   pairs,
 		"matches": createdMatches,
 	})
@@ -888,16 +884,15 @@ func createSemifinalsIfReady(ctx context.Context, tx pgx.Tx) error {
 	if err != nil {
 		return err
 	}
-	a := leaders["Group A"]
-	b := leaders["Group B"]
-	if len(a) < 2 || len(b) < 2 {
+	group := leaders[tournamentGroupName]
+	if len(group) < semifinalistsRequired {
 		return fmt.Errorf("failed to determine semifinalists")
 	}
 
-	if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'semifinal')`, a[0].PairID, b[1].PairID); err != nil {
+	if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'semifinal')`, group[0].PairID, group[3].PairID); err != nil {
 		return fmt.Errorf("failed to create semifinal 1")
 	}
-	if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'semifinal')`, b[0].PairID, a[1].PairID); err != nil {
+	if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'semifinal')`, group[1].PairID, group[2].PairID); err != nil {
 		return fmt.Errorf("failed to create semifinal 2")
 	}
 	return nil
@@ -999,23 +994,24 @@ func compareStandings(a, b standingsRow) bool {
 }
 
 func createGroupMatches(ctx context.Context, tx pgx.Tx, groupID string, groupPairs []pair, matches *[]match) error {
-	fixtures := [][2]int{{0, 1}, {0, 2}, {1, 2}}
-	for _, fixture := range fixtures {
-		pair1 := groupPairs[fixture[0]]
-		pair2 := groupPairs[fixture[1]]
-		var m match
-		err := tx.QueryRow(ctx, `
-			insert into matches (group_id, pair1_id, pair2_id, round)
-			values ($1, $2, $3, 'group')
-			returning id, group_id, pair1_id, pair2_id, round, status, scheduled_at, winner_pair_id, created_at`,
-			groupID, pair1.ID, pair2.ID,
-		).Scan(&m.ID, &m.GroupID, &m.Pair1ID, &m.Pair2ID, &m.Round, &m.Status, &m.ScheduledAt, &m.WinnerPairID, &m.CreatedAt)
-		if err != nil {
-			return err
+	for i := 0; i < len(groupPairs); i++ {
+		for j := i + 1; j < len(groupPairs); j++ {
+			pair1 := groupPairs[i]
+			pair2 := groupPairs[j]
+			var m match
+			err := tx.QueryRow(ctx, `
+				insert into matches (group_id, pair1_id, pair2_id, round)
+				values ($1, $2, $3, 'group')
+				returning id, group_id, pair1_id, pair2_id, round, status, scheduled_at, winner_pair_id, created_at`,
+				groupID, pair1.ID, pair2.ID,
+			).Scan(&m.ID, &m.GroupID, &m.Pair1ID, &m.Pair2ID, &m.Round, &m.Status, &m.ScheduledAt, &m.WinnerPairID, &m.CreatedAt)
+			if err != nil {
+				return err
+			}
+			m.Pair1Name = pair1.Name
+			m.Pair2Name = pair2.Name
+			*matches = append(*matches, m)
 		}
-		m.Pair1Name = pair1.Name
-		m.Pair2Name = pair2.Name
-		*matches = append(*matches, m)
 	}
 	return nil
 }
