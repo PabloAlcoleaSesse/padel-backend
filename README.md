@@ -2,7 +2,7 @@
 
 Go API for a 12-player mixed-pair padel tournament using PostgreSQL/Neon.
 
-## Setup
+## Neon Setup
 
 1. Create a Neon PostgreSQL database.
 2. Apply the schema:
@@ -28,15 +28,78 @@ go run .
 
 The API listens on `PORT` or `8080` by default.
 
+## Docker PostgreSQL Setup
+
+For a home server, run PostgreSQL in Docker and point the API at it.
+
+1. Create a Docker env file:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Edit `.env.docker` and change `POSTGRES_PASSWORD`.
+
+2. Start PostgreSQL:
+
+```bash
+docker compose --env-file .env.docker up -d
+```
+
+On first startup, Docker automatically applies `schema.sql` through `/docker-entrypoint-initdb.d`.
+
+3. Run the API against Docker PostgreSQL:
+
+```bash
+export DATABASE_URL='postgresql://padel:YOUR_PASSWORD@localhost:5432/padel?sslmode=disable'
+go run .
+```
+
+If the API is also running in Docker on the same Compose network, use host `postgres` instead of `localhost`:
+
+```text
+postgresql://padel:YOUR_PASSWORD@postgres:5432/padel?sslmode=disable
+```
+
+Useful database commands:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs postgres
+docker compose --env-file .env.docker exec postgres psql -U padel -d padel
+```
+
 ## Endpoints
 
 - `GET /health`
 - `GET /players`
 - `POST /players`
 - `POST /tournament/randomize`
+- `GET /tournament`
 - `GET /groups`
+- `GET /results`
+- `GET /bracket`
+- `GET /champions`
 - `GET /matches`
 - `POST /matches/{id}/result`
+
+Use `GET /tournament` for the full page payload. It returns:
+
+```json
+{
+  "groups": [],
+  "results": [],
+  "bracket": {
+    "semifinals": [],
+    "final": null
+  },
+  "champions": {
+    "champion": null,
+    "runner_up": null,
+    "final": null
+  }
+}
+```
 
 ## Player Example
 

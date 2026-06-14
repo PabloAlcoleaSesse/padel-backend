@@ -78,6 +78,44 @@ type groupPairResponse struct {
 	PTS   int    `json:"pts"`
 }
 
+type pairSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type displayMatch struct {
+	ID           string      `json:"id"`
+	Round        string      `json:"round"`
+	GroupName    *string     `json:"group_name,omitempty"`
+	Pair1        pairSummary `json:"pair1"`
+	Pair2        pairSummary `json:"pair2"`
+	Status       string      `json:"status"`
+	WinnerPairID *string     `json:"winner_pair_id,omitempty"`
+	Sets         []scoreSet  `json:"sets"`
+}
+
+type scoreSet struct {
+	SetNumber  int `json:"set_number"`
+	Pair1Games int `json:"pair1_games"`
+	Pair2Games int `json:"pair2_games"`
+}
+
+type groupMatchesResponse struct {
+	Name    string         `json:"name"`
+	Matches []displayMatch `json:"matches"`
+}
+
+type bracketResponse struct {
+	Semifinals []displayMatch `json:"semifinals"`
+	Final      *displayMatch  `json:"final"`
+}
+
+type championsResponse struct {
+	Champion *pairSummary  `json:"champion"`
+	RunnerUp *pairSummary  `json:"runner_up"`
+	Final    *displayMatch `json:"final"`
+}
+
 type standingsRow struct {
 	GroupID   string
 	GroupName string
@@ -120,7 +158,11 @@ func main() {
 	mux.HandleFunc("GET /players", a.listPlayers)
 	mux.HandleFunc("POST /players", a.createPlayer)
 	mux.HandleFunc("POST /tournament/randomize", a.randomizeTournament)
+	mux.HandleFunc("GET /tournament", a.tournamentOverview)
 	mux.HandleFunc("GET /groups", a.listGroups)
+	mux.HandleFunc("GET /results", a.listResults)
+	mux.HandleFunc("GET /bracket", a.listBracket)
+	mux.HandleFunc("GET /champions", a.listChampions)
 	mux.HandleFunc("GET /matches", a.listMatches)
 	mux.HandleFunc("POST /matches/{id}/result", a.submitMatchResult)
 
@@ -413,35 +455,246 @@ func (a *app) listGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (a *app) tournamentOverview(w http.ResponseWriter, r *http.Request) {
+	groups, err := a.loadGroups(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load groups")
+		return
+	}
+	matches, err := a.loadDisplayMatches(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load matches")
+		return
+	}
+
+	results := groupStageMatches(matches)
+	bracket := buildBracket(matches)
+	champions := buildChampions(matches)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"groups":    groups,
+		"results":   results,
+		"bracket":   bracket,
+		"champions": champions,
+	})
+}
+
+func (a *app) listResults(w http.ResponseWriter, r *http.Request) {
+	matches, err := a.loadDisplayMatches(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load results")
+		return
+	}
+	writeJSON(w, http.StatusOK, groupStageMatches(matches))
+}
+
+func (a *app) listBracket(w http.ResponseWriter, r *http.Request) {
+	matches, err := a.loadDisplayMatches(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load bracket")
+		return
+	}
+	writeJSON(w, http.StatusOK, buildBracket(matches))
+}
+
+func (a *app) listChampions(w http.ResponseWriter, r *http.Request) {
+	matches, err := a.loadDisplayMatches(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load champions")
+		return
+	}
+	writeJSON(w, http.StatusOK, buildChampions(matches))
+}
+
 func (a *app) listMatches(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), `
-		select m.id, m.group_id, m.pair1_id, m.pair2_id, p1.name, p2.name,
-		       m.round, m.status, m.scheduled_at, m.winner_pair_id, m.created_at
-		from matches m
-		join pairs p1 on p1.id = m.pair1_id
-		join pairs p2 on p2.id = m.pair2_id
-		order by case m.round when 'group' then 1 when 'semifinal' then 2 else 3 end, m.created_at`)
+	matches, err := a.loadDisplayMatches(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list matches")
 		return
 	}
-	defer rows.Close()
 
-	resp := map[string][]match{"group": {}, "semifinal": {}, "final": {}}
-	for rows.Next() {
-		var m match
-		if err := rows.Scan(&m.ID, &m.GroupID, &m.Pair1ID, &m.Pair2ID, &m.Pair1Name, &m.Pair2Name, &m.Round, &m.Status, &m.ScheduledAt, &m.WinnerPairID, &m.CreatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to read matches")
-			return
-		}
+	resp := map[string][]displayMatch{"group": {}, "semifinal": {}, "final": {}}
+	for _, m := range matches {
 		resp[m.Round] = append(resp[m.Round], m)
 	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *app) loadGroups(ctx context.Context) ([]groupResponse, error) {
+	rows, err := a.db.Query(ctx, `
+		select g.id, g.name, p.id, p.name, gs.played, gs.wins, gs.losses,
+		       gs.sets_won, gs.sets_lost, gs.games_won, gs.games_lost, gs.points
+		from groups g
+		join group_standings gs on gs.group_id = g.id
+		join pairs p on p.id = gs.pair_id
+		order by g.name,
+		         gs.points desc,
+		         (gs.sets_won - gs.sets_lost) desc,
+		         (gs.games_won - gs.games_lost) desc,
+		         gs.sets_won desc,
+		         gs.games_won desc,
+		         p.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groupMap := map[string]*groupResponse{}
+	order := []string{}
+	for rows.Next() {
+		var row standingsRow
+		if err := rows.Scan(&row.GroupID, &row.GroupName, &row.PairID, &row.PairName, &row.Played, &row.Wins, &row.Losses, &row.SetsWon, &row.SetsLost, &row.GamesWon, &row.GamesLost, &row.Points); err != nil {
+			return nil, err
+		}
+		gr, ok := groupMap[row.GroupID]
+		if !ok {
+			gr = &groupResponse{Name: row.GroupName}
+			groupMap[row.GroupID] = gr
+			order = append(order, row.GroupID)
+		}
+		gr.Pairs = append(gr.Pairs, groupPairResponse{
+			ID:    row.PairID,
+			Name:  row.PairName,
+			PJ:    row.Played,
+			PG:    row.Wins,
+			PP:    row.Losses,
+			Sets:  fmt.Sprintf("%d-%d", row.SetsWon, row.SetsLost),
+			Games: fmt.Sprintf("%d-%d", row.GamesWon, row.GamesLost),
+			PTS:   row.Points,
+		})
+	}
 	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to read matches")
-		return
+		return nil, err
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	resp := make([]groupResponse, 0, len(order))
+	for _, groupID := range order {
+		resp = append(resp, *groupMap[groupID])
+	}
+	return resp, nil
+}
+
+func (a *app) loadDisplayMatches(ctx context.Context) ([]displayMatch, error) {
+	rows, err := a.db.Query(ctx, `
+		select m.id, m.round, g.name, p1.id, p1.name, p2.id, p2.name,
+		       m.status, m.winner_pair_id
+		from matches m
+		left join groups g on g.id = m.group_id
+		join pairs p1 on p1.id = m.pair1_id
+		join pairs p2 on p2.id = m.pair2_id
+		order by case m.round when 'group' then 1 when 'semifinal' then 2 else 3 end,
+		         g.name nulls last,
+		         m.created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	matches := []displayMatch{}
+	matchIndexByID := map[string]int{}
+	for rows.Next() {
+		var m displayMatch
+		if err := rows.Scan(&m.ID, &m.Round, &m.GroupName, &m.Pair1.ID, &m.Pair1.Name, &m.Pair2.ID, &m.Pair2.Name, &m.Status, &m.WinnerPairID); err != nil {
+			return nil, err
+		}
+		m.Sets = []scoreSet{}
+		matches = append(matches, m)
+		matchIndexByID[m.ID] = len(matches) - 1
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	setRows, err := a.db.Query(ctx, `
+		select match_id, set_number, pair1_games, pair2_games
+		from match_sets
+		order by set_number`)
+	if err != nil {
+		return nil, err
+	}
+	defer setRows.Close()
+
+	for setRows.Next() {
+		var matchID string
+		var set scoreSet
+		if err := setRows.Scan(&matchID, &set.SetNumber, &set.Pair1Games, &set.Pair2Games); err != nil {
+			return nil, err
+		}
+		if index, ok := matchIndexByID[matchID]; ok {
+			matches[index].Sets = append(matches[index].Sets, set)
+		}
+	}
+	if err := setRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return matches, nil
+}
+
+func groupStageMatches(matches []displayMatch) []groupMatchesResponse {
+	groupMap := map[string]*groupMatchesResponse{}
+	order := []string{}
+	for _, m := range matches {
+		if m.Round != "group" || m.GroupName == nil {
+			continue
+		}
+		groupName := *m.GroupName
+		group, ok := groupMap[groupName]
+		if !ok {
+			group = &groupMatchesResponse{Name: groupName}
+			groupMap[groupName] = group
+			order = append(order, groupName)
+		}
+		group.Matches = append(group.Matches, m)
+	}
+
+	resp := make([]groupMatchesResponse, 0, len(order))
+	for _, groupName := range order {
+		resp = append(resp, *groupMap[groupName])
+	}
+	return resp
+}
+
+func buildBracket(matches []displayMatch) bracketResponse {
+	bracket := bracketResponse{Semifinals: []displayMatch{}}
+	for _, m := range matches {
+		switch m.Round {
+		case "semifinal":
+			bracket.Semifinals = append(bracket.Semifinals, m)
+		case "final":
+			final := m
+			bracket.Final = &final
+		}
+	}
+	return bracket
+}
+
+func buildChampions(matches []displayMatch) championsResponse {
+	var final *displayMatch
+	for _, m := range matches {
+		if m.Round == "final" {
+			copyMatch := m
+			final = &copyMatch
+			break
+		}
+	}
+	if final == nil || final.Status != "completed" || final.WinnerPairID == nil {
+		return championsResponse{Final: final}
+	}
+
+	winnerID := *final.WinnerPairID
+	champion := final.Pair1
+	runnerUp := final.Pair2
+	if winnerID == final.Pair2.ID {
+		champion = final.Pair2
+		runnerUp = final.Pair1
+	}
+
+	return championsResponse{
+		Champion: &champion,
+		RunnerUp: &runnerUp,
+		Final:    final,
+	}
 }
 
 func (a *app) submitMatchResult(w http.ResponseWriter, r *http.Request) {
