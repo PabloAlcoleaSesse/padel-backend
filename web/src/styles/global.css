@@ -40,10 +40,35 @@ select {
   min-height: 100vh;
   margin: 0 auto;
   overflow: hidden;
-  background:
+  background: #d7dbe4;
+}
+
+.site-shell::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
     linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
-    url("/figma/background.png") top center / 100% auto repeat-y,
-    #d7dbe4;
+    url("/figma/background.png"),
+    url("/figma/background.png"),
+    url("/figma/background.png"),
+    url("/figma/background.png");
+  background-position:
+    center top,
+    center 0,
+    center 1320px,
+    center 2640px,
+    center 3960px;
+  background-repeat: no-repeat;
+  background-size:
+    100% 100%,
+    100% auto,
+    100% auto,
+    100% auto,
+    100% auto;
+  opacity: 0.96;
 }
 
 .site-shell::after {
@@ -51,6 +76,7 @@ select {
   pointer-events: none;
   position: absolute;
   inset: 0;
+  z-index: 0;
   background-image: radial-gradient(circle, rgba(33, 33, 33, 0.23) 0 1px, transparent 1px);
   background-size: 5px 5px;
   mix-blend-mode: multiply;
