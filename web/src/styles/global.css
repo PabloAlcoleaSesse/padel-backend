@@ -42,7 +42,7 @@ select {
   overflow: hidden;
   background:
     linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
-    url("/padel-texture.png") top center / 100% auto repeat-y,
+    url("/figma/background.png") top center / 100% auto repeat-y,
     #d7dbe4;
 }
 
@@ -67,6 +67,29 @@ select {
 .hero {
   min-height: 820px;
   padding: 25px 50px 90px;
+}
+
+.brand-mark {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.nav-mark {
+  position: absolute;
+  left: 50px;
+  top: 25px;
+  width: 50px;
+  height: 50px;
+}
+
+.hero-mark {
+  position: absolute;
+  left: 673px;
+  top: 498px;
+  width: 89px;
+  height: 89px;
 }
 
 .top-nav {
@@ -339,7 +362,7 @@ h2 {
   position: absolute;
   top: 169px;
   height: 1px;
-  background: var(--ink);
+  background: url("/figma/line.png") center / 100% 100% no-repeat;
 }
 
 .match-card::before {
@@ -353,11 +376,37 @@ h2 {
 }
 
 .bracket-grid {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 50px;
   align-items: center;
   min-height: 520px;
+}
+
+.bracket-grid::before,
+.bracket-grid::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 90px);
+  width: 69px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.bracket-grid::before {
+  top: 115px;
+  height: 90px;
+  background-image: url("/figma/bracket-top.svg");
+}
+
+.bracket-grid::after {
+  top: 205px;
+  height: 204px;
+  background-image: url("/figma/bracket-bottom.svg");
+  transform: scaleY(-1);
 }
 
 .bracket-column {
@@ -400,6 +449,7 @@ h2 {
   min-height: 220px;
   border-radius: 40px;
   background:
+    url("/figma/mark-dark.png") right -28px bottom -32px / 180px auto no-repeat,
     linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 45%),
     rgba(217, 220, 229, 0.9);
   padding: 36px 32px;
@@ -411,6 +461,7 @@ h2 {
 .podium-card.first {
   min-height: 300px;
   background:
+    url("/figma/mark-light.png") right -34px bottom -38px / 200px auto no-repeat,
     linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 48%),
     var(--ink);
   color: var(--paper);
@@ -440,11 +491,23 @@ h2 {
   padding: 40px 50px;
 }
 
-.site-footer strong {
+.footer-brand {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.footer-brand strong {
   font-size: 70px;
   line-height: 60px;
   letter-spacing: -2.8px;
   text-transform: uppercase;
+}
+
+.footer-mark {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
 }
 
 .site-footer span {
@@ -615,6 +678,21 @@ h2 {
     letter-spacing: -2.8px;
   }
 
+  .nav-mark {
+    left: 20px;
+    top: 18px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .hero-mark {
+    left: auto;
+    right: 30px;
+    top: 220px;
+    width: 54px;
+    height: 54px;
+  }
+
   .intro {
     max-width: 95%;
     margin-top: 34px;
@@ -764,6 +842,15 @@ h2 {
     font-size: 34px;
     line-height: 30px;
     letter-spacing: -1.36px;
+  }
+
+  .footer-brand {
+    gap: 12px;
+  }
+
+  .footer-mark {
+    width: 28px;
+    height: 28px;
   }
 
   .site-footer span {

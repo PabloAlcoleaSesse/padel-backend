@@ -15,6 +15,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL ?? "";
   <body data-api-base={apiBaseUrl}>
     <main class="site-shell">
       <header class="hero" id="top">
+        <img class="brand-mark nav-mark" src="/figma/mark-light.png" alt="" />
         <nav class="top-nav" aria-label="Secciones">
           <a href="#grupos">Grupos</a>
           <a href="#resultados">Resultados</a>
@@ -27,6 +28,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL ?? "";
           <div>
             <p class="eyebrow">Torneo oficial</p>
             <h1>Algete<br />Padel Tour<br />Masters</h1>
+            <img class="brand-mark hero-mark" src="/figma/mark-light.png" alt="" />
             <p class="intro">
               Clasificación, resultados, bracket y campeones conectados al backend del torneo.
             </p>
@@ -85,7 +87,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL ?? "";
       </section>
 
       <footer class="site-footer">
-        <strong>Algete<br />Padel Tour<br />Masters</strong>
+        <div class="footer-brand">
+          <strong>Algete<br />Padel Tour<br />Masters</strong>
+          <img class="brand-mark footer-mark" src="/figma/mark-dark.png" alt="" />
+        </div>
         <span>Organización<br />Org. Alcoholíficos Anónimos Melendez Pelayo</span>
         <span>APT © 2026<br />Ningún derecho reservado</span>
       </footer>
