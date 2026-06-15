@@ -1,4 +1,7 @@
-const apiBase = document.body.dataset.apiBase || localStorage.getItem("padelApiBase") || "http://localhost:8080";
+const configuredApiBase = document.body.dataset.apiBase?.trim();
+const localDevApiBase =
+  location.hostname === "localhost" && location.port === "4321" ? "http://localhost:8080" : "";
+const apiBase = configuredApiBase || localDevApiBase;
 
 const fallback = {
   groups: [

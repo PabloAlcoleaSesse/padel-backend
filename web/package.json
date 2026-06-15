@@ -9,8 +9,8 @@
     "preview": "astro preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.4",
-    "astro": "^4.16.18",
+    "@astrojs/check": "^0.9.2",
+    "astro": "^6.4.6",
     "typescript": "^5.6.3"
   }
 }

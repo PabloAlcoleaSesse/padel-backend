@@ -49,7 +49,15 @@ docker compose --env-file .env.docker up -d
 The API will be available at:
 
 ```text
-http://localhost:8080/health
+http://localhost:4321/
+```
+
+The backend is proxied automatically through the same web origin, so the frontend can call `/tournament`, `/players`, `/matches`, etc. without exposing or configuring a separate backend URL.
+
+Backend health is also available through the web service:
+
+```text
+http://localhost:4321/health
 ```
 
 On first database startup, Docker automatically applies `schema.sql` through `/docker-entrypoint-initdb.d`.

@@ -1,9 +1,14 @@
-const defaultApiBase = document.body.dataset.apiBase || localStorage.getItem("padelApiBase") || "http://localhost:8080";
+const configuredApiBase = document.body.dataset.apiBase?.trim();
+const savedApiBase = localStorage.getItem("padelApiBase") || "";
+const localDevApiBase =
+  location.hostname === "localhost" && location.port === "4321" ? "http://localhost:8080" : "";
+const defaultApiBase = configuredApiBase || savedApiBase || localDevApiBase;
 let apiBase = defaultApiBase;
 
 const statusEl = document.getElementById("admin-status");
 const apiInput = document.getElementById("api-base-input");
 apiInput.value = apiBase;
+apiInput.placeholder = "Same origin";
 
 function setStatus(message) {
   statusEl.textContent = message;

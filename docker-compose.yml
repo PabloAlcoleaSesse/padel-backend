@@ -1,4 +1,13 @@
 services:
+  web:
+    build: ./web
+    container_name: padel-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-4321}:80"
+    depends_on:
+      - api
+
   api:
     build: .
     container_name: padel-api
