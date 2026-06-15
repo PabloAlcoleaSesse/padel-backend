@@ -1,14 +1,9 @@
 const configuredApiBase = document.body.dataset.apiBase?.trim();
-const savedApiBase = localStorage.getItem("padelApiBase") || "";
 const localDevApiBase =
   location.hostname === "localhost" && location.port === "4321" ? "http://localhost:8080" : "";
-const defaultApiBase = configuredApiBase || savedApiBase || localDevApiBase;
-let apiBase = defaultApiBase;
+const apiBase = configuredApiBase || localDevApiBase;
 
 const statusEl = document.getElementById("admin-status");
-const apiInput = document.getElementById("api-base-input");
-apiInput.value = apiBase;
-apiInput.placeholder = "Same origin";
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -82,12 +77,6 @@ async function refresh() {
     setStatus(error.message);
   }
 }
-
-document.getElementById("save-api-base").addEventListener("click", () => {
-  apiBase = apiInput.value.replace(/\/$/, "");
-  localStorage.setItem("padelApiBase", apiBase);
-  refresh();
-});
 
 document.getElementById("player-form").addEventListener("submit", async (event) => {
   event.preventDefault();

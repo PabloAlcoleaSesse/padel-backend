@@ -19,18 +19,9 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL ?? "";
         <div>
           <p class="eyebrow">Panel admin</p>
           <h1>Gestionar torneo</h1>
+          <p class="admin-status" id="admin-status">Conectando automáticamente.</p>
         </div>
       </header>
-
-      <section class="admin-panel">
-        <h2>Conexión</h2>
-        <label class="field">
-          <span>Backend URL</span>
-          <input id="api-base-input" type="url" placeholder="http://localhost:8080" />
-        </label>
-        <button class="admin-button secondary" id="save-api-base" type="button">Guardar URL</button>
-        <p class="admin-status" id="admin-status">Listo.</p>
-      </section>
 
       <section class="admin-panel">
         <h2>Jugadores</h2>
