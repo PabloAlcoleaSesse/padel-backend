@@ -19,8 +19,17 @@ html {
 body {
   margin: 0;
   color: var(--ink);
-  background: #fff;
+  background: #d7dbe4;
   font-family: "Space Mono", monospace;
+  overflow-x: hidden;
+}
+
+body.admin-locked {
+  overflow: hidden;
+}
+
+body.admin-unlocked {
+  overflow-y: auto;
 }
 
 a {
@@ -51,23 +60,16 @@ select {
   z-index: 0;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
-    url("/figma/background.png"),
-    url("/figma/background.png"),
-    url("/figma/background.png"),
     url("/figma/background.png");
   background-position:
     center top,
-    center 0,
-    center 1320px,
-    center 2640px,
-    center 3960px;
-  background-repeat: no-repeat;
+    center top;
+  background-repeat:
+    no-repeat,
+    repeat-y;
   background-size:
     100% 100%,
-    100% auto,
-    100% auto,
-    100% auto,
-    100% auto;
+    1051px 1496px;
   opacity: 0.96;
 }
 
@@ -160,9 +162,9 @@ h2 {
 }
 
 .hero h1 {
-  font-size: 125px;
-  line-height: 0.9;
-  letter-spacing: -5px;
+  font-size: clamp(72px, 9.5vw, 125px);
+  line-height: 0.92;
+  letter-spacing: -4px;
 }
 
 .intro {
@@ -241,9 +243,9 @@ h2 {
 
 .section-block h2 {
   margin-bottom: 80px;
-  font-size: 100px;
-  line-height: 0.9;
-  letter-spacing: -4px;
+  font-size: clamp(56px, 7.5vw, 100px);
+  line-height: 0.94;
+  letter-spacing: -3px;
 }
 
 .section-block > :not(.section-kicker):not(h2) {
@@ -319,6 +321,16 @@ h2 {
 
 .group-row.eliminated {
   color: var(--red);
+}
+
+.group-row.warning {
+  color: #f2c200;
+}
+
+.group-row.warning strong,
+.group-row.warning .pts,
+.group-row.warning span {
+  color: inherit;
 }
 
 .pts {
@@ -506,6 +518,14 @@ h2 {
   letter-spacing: -1.2px;
 }
 
+.podium-name span {
+  display: block;
+}
+
+.podium-name span + span {
+  margin-top: 18px;
+}
+
 .site-footer {
   min-height: 256px;
   background: var(--ink);
@@ -544,8 +564,37 @@ h2 {
 
 .admin-shell {
   width: min(100% - 32px, 1120px);
+  min-height: 100vh;
   margin: 0 auto;
   padding: 32px 0 80px;
+}
+
+.admin-lock {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.admin-lock-card {
+  width: min(100%, 520px);
+  border-radius: 28px;
+  background: var(--panel);
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+}
+
+.admin-lock-card h1 {
+  margin: 0;
+  font-size: clamp(42px, 7vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -2px;
+  text-transform: uppercase;
+}
+
+.admin-lock-card .field input {
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .admin-header {
@@ -557,9 +606,9 @@ h2 {
 }
 
 .admin-header h1 {
-  font-size: clamp(48px, 10vw, 110px);
-  line-height: 0.9;
-  letter-spacing: -4px;
+  font-size: clamp(40px, 8vw, 110px);
+  line-height: 0.94;
+  letter-spacing: -3px;
 }
 
 .back-link,
@@ -580,8 +629,8 @@ h2 {
 
 .admin-panel h2 {
   margin: 0 0 20px;
-  font-size: 34px;
-  letter-spacing: -1.4px;
+  font-size: clamp(24px, 3.4vw, 34px);
+  letter-spacing: -1px;
 }
 
 .admin-form {
@@ -635,6 +684,12 @@ h2 {
   background: var(--red);
 }
 
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .admin-status {
   min-height: 20px;
 }
@@ -652,6 +707,22 @@ h2 {
   align-items: center;
   border-bottom: 1px solid rgba(33, 33, 33, 0.18);
   padding: 10px 0;
+}
+
+.player-edit-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 130px 130px auto;
+  align-items: end;
+}
+
+.field.compact span,
+.check-field.compact {
+  font-size: 11px;
+}
+
+.field.compact input,
+.field.compact select {
+  padding: 9px 10px;
 }
 
 .result-form {
@@ -674,34 +745,51 @@ h2 {
     width: 100%;
   }
 
+  .site-shell::before {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
+      url("/figma/background.png");
+    background-position:
+      center top,
+      center top;
+    background-repeat:
+      no-repeat,
+      repeat-y;
+    background-size:
+      100% 100%,
+      1051px 1496px;
+  }
+
   .hero {
-    min-height: 720px;
+    min-height: auto;
     padding: 18px 20px 70px;
   }
 
   .top-nav {
-    gap: 12px;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     justify-content: flex-start;
+    padding-left: 42px;
     font-size: 11px;
-    letter-spacing: -0.44px;
+    letter-spacing: 0;
+    line-height: 1.25;
   }
 
   .hero-grid {
     grid-template-columns: 1fr;
     gap: 28px;
-    margin-top: 52px;
+    margin-top: 58px;
   }
 
   .eyebrow {
     margin-bottom: 24px;
     font-size: 12px;
-    letter-spacing: -0.48px;
+    letter-spacing: 0;
   }
 
   .hero h1 {
-    font-size: clamp(48px, 15vw, 72px);
-    letter-spacing: -2.8px;
+    font-size: clamp(44px, 14vw, 68px);
+    letter-spacing: 0;
   }
 
   .nav-mark {
@@ -713,8 +801,8 @@ h2 {
 
   .hero-mark {
     left: auto;
-    right: 30px;
-    top: 220px;
+    right: 22px;
+    top: 230px;
     width: 54px;
     height: 54px;
   }
@@ -723,11 +811,11 @@ h2 {
     max-width: 95%;
     margin-top: 34px;
     font-size: 12px;
-    letter-spacing: -0.48px;
+    letter-spacing: 0;
   }
 
   .event-meta {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     margin-top: 0;
   }
@@ -738,10 +826,12 @@ h2 {
 
   .event-meta strong {
     font-size: 11px;
-    letter-spacing: -0.44px;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
   }
 
   .hero-actions {
+    flex-wrap: wrap;
     justify-content: flex-start;
     gap: 10px;
     margin-top: 34px;
@@ -751,7 +841,7 @@ h2 {
     min-height: 32px;
     padding: 0 14px;
     font-size: 10px;
-    letter-spacing: -0.4px;
+    letter-spacing: 0;
   }
 
   .section-block {
@@ -760,17 +850,17 @@ h2 {
   }
 
   .section-kicker {
-    float: left;
-    width: 80px;
+    float: none;
+    width: auto;
     padding-top: 7px;
     font-size: 11px;
-    letter-spacing: -0.44px;
+    letter-spacing: 0;
   }
 
   .section-block h2 {
-    margin: 0 0 34px 92px;
-    font-size: clamp(42px, 12vw, 62px);
-    letter-spacing: -2.2px;
+    margin: 12px 0 34px;
+    font-size: clamp(34px, 11vw, 58px);
+    letter-spacing: 0;
   }
 
   .groups-grid,
@@ -785,13 +875,12 @@ h2 {
   .groups-grid,
   .matches-grid {
     gap: 18px;
-    clear: both;
   }
 
   .group-card,
   .match-card {
     border-radius: 28px;
-    padding: 22px 18px;
+    padding: 22px 14px;
   }
 
   .group-card {
@@ -800,7 +889,7 @@ h2 {
 
   .group-head h3 {
     font-size: 17px;
-    letter-spacing: -0.68px;
+    letter-spacing: 0;
   }
 
   .group-head span,
@@ -808,17 +897,17 @@ h2 {
   .match-meta,
   .vs {
     font-size: 10px;
-    letter-spacing: -0.4px;
+    letter-spacing: 0;
   }
 
   .group-row {
-    grid-template-columns: 26px minmax(0, 1fr) 24px 24px 24px 42px 28px;
+    grid-template-columns: 22px minmax(82px, 1fr) 22px 22px 22px 36px 24px;
     padding: 9px 0;
   }
 
   .group-row strong {
     font-size: 11px;
-    letter-spacing: -0.44px;
+    letter-spacing: 0;
   }
 
   .match-card {
@@ -834,7 +923,7 @@ h2 {
   .score-line {
     font-size: 15px;
     line-height: 13px;
-    letter-spacing: -0.6px;
+    letter-spacing: 0;
   }
 
   .pair-name span + span {
@@ -844,19 +933,45 @@ h2 {
   .match-card::before,
   .match-card::after {
     top: 123px;
-    width: calc(50% - 54px);
+    width: calc(50% - 52px);
   }
 
   .bracket-grid,
   .podium-grid {
-    clear: both;
     gap: 18px;
     min-height: 0;
+  }
+
+  .bracket-grid::before,
+  .bracket-grid::after {
+    display: none;
+  }
+
+  .bracket-card {
+    border-radius: 28px;
+    min-height: 0;
+    padding: 22px 14px;
+  }
+
+  .bracket-card .match-body {
+    grid-template-columns: minmax(0, 1fr) 28px 64px;
   }
 
   .podium-card,
   .podium-card.first {
     min-height: 170px;
+    border-radius: 28px;
+    padding: 26px 22px;
+  }
+
+  .podium-name {
+    font-size: 22px;
+    line-height: 18px;
+    letter-spacing: 0;
+  }
+
+  .podium-name span + span {
+    margin-top: 12px;
   }
 
   .site-footer {
@@ -867,7 +982,7 @@ h2 {
   .site-footer strong {
     font-size: 34px;
     line-height: 30px;
-    letter-spacing: -1.36px;
+    letter-spacing: 0;
   }
 
   .footer-brand {
@@ -882,14 +997,64 @@ h2 {
   .site-footer span {
     font-size: 11px;
     line-height: 13px;
-    letter-spacing: -0.44px;
+    letter-spacing: 0;
   }
 
   .admin-shell {
     width: min(100% - 24px, 1120px);
+    padding: 18px 0 56px;
   }
 
   .admin-header {
     display: grid;
+  }
+
+  .admin-header h1 {
+    font-size: clamp(34px, 13vw, 56px);
+    letter-spacing: 0;
+  }
+
+  .admin-panel {
+    border-radius: 22px;
+    padding: 18px 14px;
+  }
+
+  .admin-panel h2 {
+    font-size: clamp(22px, 7vw, 26px);
+    letter-spacing: 0;
+  }
+
+  .admin-form {
+    gap: 12px;
+  }
+
+  .admin-item {
+    display: grid;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .admin-actions {
+    display: grid;
+  }
+
+  .player-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .result-form {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .result-form input {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 6px;
+  }
+
+  .result-form .admin-button {
+    grid-column: 1 / -1;
   }
 }

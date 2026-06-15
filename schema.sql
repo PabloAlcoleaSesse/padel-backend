@@ -7,10 +7,12 @@ exception
 end $$;
 
 do $$ begin
-    create type match_round as enum ('group', 'semifinal', 'final');
+    create type match_round as enum ('group', 'semifinal', 'third_place', 'final');
 exception
     when duplicate_object then null;
 end $$;
+
+alter type match_round add value if not exists 'third_place' after 'semifinal';
 
 do $$ begin
     create type match_status as enum ('scheduled', 'completed');

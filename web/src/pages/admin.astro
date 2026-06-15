@@ -12,55 +12,20 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL ?? "";
     <meta name="description" content="Admin panel for Algete Padel Tour Masters." />
     <title>Admin · Algete Padel Tour Masters</title>
   </head>
-  <body data-api-base={apiBaseUrl}>
-    <main class="admin-shell">
-      <header class="admin-header">
-        <a class="back-link" href="/">← Sitio</a>
-        <div>
-          <p class="eyebrow">Panel admin</p>
-          <h1>Gestionar torneo</h1>
-          <p class="admin-status" id="admin-status">Conectando automáticamente.</p>
-        </div>
-      </header>
-
-      <section class="admin-panel">
-        <h2>Jugadores</h2>
-        <form class="admin-form" id="player-form">
-          <label class="field">
-            <span>Nombre</span>
-            <input name="first_name" required />
-          </label>
-          <label class="field">
-            <span>Apellido</span>
-            <input name="last_name" required />
-          </label>
-          <label class="field">
-            <span>Género</span>
-            <select name="gender" required>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-          </label>
-          <label class="check-field">
-            <input name="is_available" type="checkbox" checked />
-            <span>Disponible</span>
-          </label>
-          <button class="admin-button" type="submit">Crear jugador</button>
-        </form>
-        <div class="admin-list" id="players-list"></div>
-      </section>
-
-      <section class="admin-panel">
-        <h2>Torneo</h2>
-        <button class="admin-button danger" id="randomize-button" type="button">Randomizar torneo</button>
-        <p class="hint">Esto recrea 5 parejas mixtas, una clasificación única y 10 partidos de fase de grupos.</p>
-      </section>
-
-      <section class="admin-panel">
-        <h2>Partidos</h2>
-        <div class="admin-list matches-admin" id="matches-admin"></div>
-      </section>
-    </main>
+  <body class="admin-page admin-locked" data-api-base={apiBaseUrl}>
+    <section class="admin-lock" id="admin-lock">
+      <form class="admin-lock-card" id="admin-lock-form">
+        <p class="eyebrow">Acceso rápido</p>
+        <h1>Código admin</h1>
+        <p class="hint">Introduce el código para entrar al cuarto de admin.</p>
+        <label class="field">
+          <span>Código</span>
+          <input name="access_code" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="admin-button" type="submit">Entrar</button>
+        <p class="admin-status" id="admin-lock-status"></p>
+      </form>
+    </section>
 
     <script type="module" src="/scripts/admin.js"></script>
   </body>

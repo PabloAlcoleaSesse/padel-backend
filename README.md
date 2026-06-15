@@ -1,36 +1,10 @@
-# Padel Tournament Backend
+# Padel Tournament App
 
-Go API for a 10-player mixed-pair padel tournament using PostgreSQL/Neon.
+Go API and Astro website for a 10-player mixed-pair padel tournament using PostgreSQL.
 
-## Neon Setup
+## Quick Local Docker Setup
 
-1. Create a Neon PostgreSQL database.
-2. Apply the schema:
-
-```bash
-psql "$DATABASE_URL" -f schema.sql
-```
-
-3. Configure environment variables:
-
-```bash
-cp .env.example .env
-```
-
-Set `DATABASE_URL` in `.env` to your Neon connection string. Do not expose this value in frontend code.
-
-4. Run locally:
-
-```bash
-go mod tidy
-go run .
-```
-
-The API listens on `PORT` or `8080` by default.
-
-## Docker Setup
-
-For a home server, run the Go API and PostgreSQL together with Docker Compose.
+This is the recommended setup for a home server. It runs the website, Go API, and PostgreSQL together.
 
 1. Create a Docker env file:
 
@@ -40,21 +14,22 @@ cp .env.docker.example .env.docker
 
 Edit `.env.docker` and change `POSTGRES_PASSWORD`.
 
-2. Start the backend and PostgreSQL:
+2. Start everything:
 
 ```bash
-docker compose --env-file .env.docker up -d
+docker compose --env-file .env.docker up -d --build
 ```
 
-The API will be available at:
+The website and admin are available at:
 
 ```text
 http://localhost:4321/
+http://localhost:4321/admin/
 ```
 
-The backend is proxied automatically through the same web origin, so the frontend can call `/tournament`, `/players`, `/matches`, etc. without exposing or configuring a separate backend URL.
+The backend is proxied through the same web origin, so the frontend calls `/tournament`, `/players`, `/matches`, etc. without exposing or configuring a separate backend URL.
 
-Backend health is also available through the web service:
+Health check:
 
 ```text
 http://localhost:4321/health
@@ -78,11 +53,41 @@ docker compose --env-file .env.docker exec postgres psql -U padel -d padel
 docker compose --env-file .env.docker down
 ```
 
+## Optional Neon Setup
+
+If you deploy the API without the Docker Postgres service, you can use Neon instead.
+
+1. Create a Neon PostgreSQL database.
+2. Apply the schema:
+
+```bash
+psql "$DATABASE_URL" -f schema.sql
+```
+
+3. Configure environment variables:
+
+```bash
+cp .env.example .env
+```
+
+Set `DATABASE_URL` in `.env` to your Neon connection string. Do not expose this value in frontend code.
+
+4. Run the API locally:
+
+```bash
+go mod tidy
+go run .
+```
+
+The API listens on `PORT` or `8080` by default.
+
 ## Endpoints
 
 - `GET /health`
 - `GET /players`
 - `POST /players`
+- `PUT /players/{id}`
+- `POST /tournament/reset`
 - `POST /tournament/randomize`
 - `GET /tournament`
 - `GET /groups`
@@ -141,6 +146,7 @@ curl -X POST http://localhost:8080/matches/MATCH_ID/result \
 - Top 4 pairs qualify.
 - Semifinal 1: 1st vs 4th.
 - Semifinal 2: 2nd vs 3rd.
+- Third-place match: semifinal losers.
 - Final: semifinal winners.
 
 Group rankings are sorted by points, set difference, game difference, sets won, then games won.

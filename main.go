@@ -113,13 +113,16 @@ type groupMatchesResponse struct {
 
 type bracketResponse struct {
 	Semifinals []displayMatch `json:"semifinals"`
+	ThirdPlace *displayMatch  `json:"third_place"`
 	Final      *displayMatch  `json:"final"`
 }
 
 type championsResponse struct {
-	Champion *pairSummary  `json:"champion"`
-	RunnerUp *pairSummary  `json:"runner_up"`
-	Final    *displayMatch `json:"final"`
+	Champion        *pairSummary  `json:"champion"`
+	RunnerUp        *pairSummary  `json:"runner_up"`
+	ThirdPlace      *pairSummary  `json:"third_place"`
+	Final           *displayMatch `json:"final"`
+	ThirdPlaceMatch *displayMatch `json:"third_place_match"`
 }
 
 type standingsRow struct {
@@ -157,12 +160,20 @@ func main() {
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
+	if err := ensureDatabaseUpgrades(ctx, pool); err != nil {
+		log.Fatalf("upgrade database: %v", err)
+	}
+	if err := ensureDerivedMatches(ctx, pool); err != nil {
+		log.Fatalf("reconcile tournament matches: %v", err)
+	}
 
 	a := &app{db: pool}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", a.health)
 	mux.HandleFunc("GET /players", a.listPlayers)
 	mux.HandleFunc("POST /players", a.createPlayer)
+	mux.HandleFunc("PUT /players/{id}", a.updatePlayer)
+	mux.HandleFunc("POST /tournament/reset", a.resetTournament)
 	mux.HandleFunc("POST /tournament/randomize", a.randomizeTournament)
 	mux.HandleFunc("GET /tournament", a.tournamentOverview)
 	mux.HandleFunc("GET /groups", a.listGroups)
@@ -186,7 +197,7 @@ func main() {
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -205,6 +216,24 @@ func jsonOnly(next http.Handler) http.Handler {
 
 func (a *app) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func ensureDatabaseUpgrades(ctx context.Context, pool *pgxpool.Pool) error {
+	_, err := pool.Exec(ctx, `alter type match_round add value if not exists 'third_place' after 'semifinal'`)
+	return err
+}
+
+func ensureDerivedMatches(ctx context.Context, pool *pgxpool.Pool) error {
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer rollback(ctx, tx)
+
+	if err := createFinalsIfReady(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (a *app) listPlayers(w http.ResponseWriter, r *http.Request) {
@@ -238,28 +267,18 @@ func (a *app) createPlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.FirstName = strings.TrimSpace(req.FirstName)
-	req.LastName = strings.TrimSpace(req.LastName)
-	req.Gender = strings.ToLower(strings.TrimSpace(req.Gender))
-	if req.FirstName == "" || req.LastName == "" {
-		writeError(w, http.StatusBadRequest, "first_name and last_name are required")
+	normalized, err := normalizePlayerInput(req.FirstName, req.LastName, req.Gender, req.IsAvailable)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	if req.Gender != "male" && req.Gender != "female" {
-		writeError(w, http.StatusBadRequest, "gender must be male or female")
-		return
-	}
-	isAvailable := true
-	if req.IsAvailable != nil {
-		isAvailable = *req.IsAvailable
 	}
 
 	var p player
-	err := a.db.QueryRow(r.Context(), `
+	err = a.db.QueryRow(r.Context(), `
 		insert into players (first_name, last_name, gender, is_available)
 		values ($1, $2, $3, $4)
 		returning id, first_name, last_name, gender, is_available, created_at`,
-		req.FirstName, req.LastName, req.Gender, isAvailable,
+		normalized.FirstName, normalized.LastName, normalized.Gender, normalized.IsAvailable,
 	).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Gender, &p.IsAvailable, &p.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create player")
@@ -267,6 +286,111 @@ func (a *app) createPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, p)
+}
+
+func (a *app) updatePlayer(w http.ResponseWriter, r *http.Request) {
+	playerID := r.PathValue("id")
+	var req struct {
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Gender      string `json:"gender"`
+		IsAvailable *bool  `json:"is_available"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	normalized, err := normalizePlayerInput(req.FirstName, req.LastName, req.Gender, req.IsAvailable)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var p player
+	err = a.db.QueryRow(r.Context(), `
+		update players
+		set first_name = $1, last_name = $2, gender = $3, is_available = $4
+		where id = $5
+		returning id, first_name, last_name, gender, is_available, created_at`,
+		normalized.FirstName, normalized.LastName, normalized.Gender, normalized.IsAvailable, playerID,
+	).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Gender, &p.IsAvailable, &p.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update player")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, p)
+}
+
+type normalizedPlayerInput struct {
+	FirstName   string
+	LastName    string
+	Gender      string
+	IsAvailable bool
+}
+
+func normalizePlayerInput(firstName, lastName, gender string, isAvailable *bool) (normalizedPlayerInput, error) {
+	input := normalizedPlayerInput{
+		FirstName:   strings.TrimSpace(firstName),
+		LastName:    strings.TrimSpace(lastName),
+		Gender:      strings.ToLower(strings.TrimSpace(gender)),
+		IsAvailable: true,
+	}
+	if isAvailable != nil {
+		input.IsAvailable = *isAvailable
+	}
+	if input.FirstName == "" || input.LastName == "" {
+		return input, errors.New("first_name and last_name are required")
+	}
+	if input.Gender != "male" && input.Gender != "female" {
+		return input, errors.New("gender must be male or female")
+	}
+	return input, nil
+}
+
+func (a *app) resetTournament(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tx, err := a.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer rollback(ctx, tx)
+
+	if err := clearTournament(ctx, tx); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit tournament reset")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "reset"})
+}
+
+func clearTournament(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `delete from match_sets`); err != nil {
+		return fmt.Errorf("failed to reset match sets")
+	}
+	if _, err := tx.Exec(ctx, `delete from matches`); err != nil {
+		return fmt.Errorf("failed to reset matches")
+	}
+	if _, err := tx.Exec(ctx, `delete from group_standings`); err != nil {
+		return fmt.Errorf("failed to reset standings")
+	}
+	if _, err := tx.Exec(ctx, `delete from group_pairs`); err != nil {
+		return fmt.Errorf("failed to reset group pairs")
+	}
+	if _, err := tx.Exec(ctx, `delete from pairs`); err != nil {
+		return fmt.Errorf("failed to reset pairs")
+	}
+	return nil
 }
 
 func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
@@ -317,24 +441,8 @@ func (a *app) randomizeTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := tx.Exec(ctx, `delete from match_sets`); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to reset match sets")
-		return
-	}
-	if _, err := tx.Exec(ctx, `delete from matches`); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to reset matches")
-		return
-	}
-	if _, err := tx.Exec(ctx, `delete from group_standings`); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to reset standings")
-		return
-	}
-	if _, err := tx.Exec(ctx, `delete from group_pairs`); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to reset group pairs")
-		return
-	}
-	if _, err := tx.Exec(ctx, `delete from pairs`); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to reset pairs")
+	if err := clearTournament(ctx, tx); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -509,7 +617,7 @@ func (a *app) listMatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string][]displayMatch{"group": {}, "semifinal": {}, "final": {}}
+	resp := map[string][]displayMatch{"group": {}, "semifinal": {}, "third_place": {}, "final": {}}
 	for _, m := range matches {
 		resp[m.Round] = append(resp[m.Round], m)
 	}
@@ -578,7 +686,7 @@ func (a *app) loadDisplayMatches(ctx context.Context) ([]displayMatch, error) {
 		left join groups g on g.id = m.group_id
 		join pairs p1 on p1.id = m.pair1_id
 		join pairs p2 on p2.id = m.pair2_id
-		order by case m.round when 'group' then 1 when 'semifinal' then 2 else 3 end,
+		order by case m.round when 'group' then 1 when 'semifinal' then 2 when 'third_place' then 3 else 4 end,
 		         g.name nulls last,
 		         m.created_at`)
 	if err != nil {
@@ -657,6 +765,9 @@ func buildBracket(matches []displayMatch) bracketResponse {
 		switch m.Round {
 		case "semifinal":
 			bracket.Semifinals = append(bracket.Semifinals, m)
+		case "third_place":
+			thirdPlace := m
+			bracket.ThirdPlace = &thirdPlace
 		case "final":
 			final := m
 			bracket.Final = &final
@@ -667,15 +778,19 @@ func buildBracket(matches []displayMatch) bracketResponse {
 
 func buildChampions(matches []displayMatch) championsResponse {
 	var final *displayMatch
+	var thirdPlaceMatch *displayMatch
 	for _, m := range matches {
-		if m.Round == "final" {
+		switch m.Round {
+		case "final":
 			copyMatch := m
 			final = &copyMatch
-			break
+		case "third_place":
+			copyMatch := m
+			thirdPlaceMatch = &copyMatch
 		}
 	}
 	if final == nil || final.Status != "completed" || final.WinnerPairID == nil {
-		return championsResponse{Final: final}
+		return championsResponse{Final: final, ThirdPlaceMatch: thirdPlaceMatch}
 	}
 
 	winnerID := *final.WinnerPairID
@@ -686,11 +801,20 @@ func buildChampions(matches []displayMatch) championsResponse {
 		runnerUp = final.Pair1
 	}
 
-	return championsResponse{
-		Champion: &champion,
-		RunnerUp: &runnerUp,
-		Final:    final,
+	resp := championsResponse{
+		Champion:        &champion,
+		RunnerUp:        &runnerUp,
+		Final:           final,
+		ThirdPlaceMatch: thirdPlaceMatch,
 	}
+	if thirdPlaceMatch != nil && thirdPlaceMatch.Status == "completed" && thirdPlaceMatch.WinnerPairID != nil {
+		thirdPlace := thirdPlaceMatch.Pair1
+		if *thirdPlaceMatch.WinnerPairID == thirdPlaceMatch.Pair2.ID {
+			thirdPlace = thirdPlaceMatch.Pair2
+		}
+		resp.ThirdPlace = &thirdPlace
+	}
+	return resp
 }
 
 func (a *app) submitMatchResult(w http.ResponseWriter, r *http.Request) {
@@ -787,7 +911,7 @@ func (a *app) submitMatchResult(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if m.Round == "semifinal" {
-		if err := createFinalIfReady(ctx, tx); err != nil {
+		if err := createFinalsIfReady(ctx, tx); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -898,17 +1022,18 @@ func createSemifinalsIfReady(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-func createFinalIfReady(ctx context.Context, tx pgx.Tx) error {
+func createFinalsIfReady(ctx context.Context, tx pgx.Tx) error {
 	var existingFinals int
 	if err := tx.QueryRow(ctx, `select count(*) from matches where round = 'final'`).Scan(&existingFinals); err != nil {
 		return fmt.Errorf("failed to check final")
 	}
-	if existingFinals > 0 {
-		return nil
+	var existingThirdPlace int
+	if err := tx.QueryRow(ctx, `select count(*) from matches where round = 'third_place'`).Scan(&existingThirdPlace); err != nil {
+		return fmt.Errorf("failed to check third-place match")
 	}
 
 	rows, err := tx.Query(ctx, `
-		select winner_pair_id
+		select pair1_id, pair2_id, winner_pair_id
 		from matches
 		where round = 'semifinal'
 		order by created_at`)
@@ -918,13 +1043,21 @@ func createFinalIfReady(ctx context.Context, tx pgx.Tx) error {
 	defer rows.Close()
 
 	var winners []string
+	var losers []string
 	for rows.Next() {
+		var pair1ID string
+		var pair2ID string
 		var winnerID *string
-		if err := rows.Scan(&winnerID); err != nil {
+		if err := rows.Scan(&pair1ID, &pair2ID, &winnerID); err != nil {
 			return fmt.Errorf("failed to read semifinal winner")
 		}
 		if winnerID != nil {
 			winners = append(winners, *winnerID)
+			if *winnerID == pair1ID {
+				losers = append(losers, pair2ID)
+			} else {
+				losers = append(losers, pair1ID)
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -934,6 +1067,14 @@ func createFinalIfReady(ctx context.Context, tx pgx.Tx) error {
 		return nil
 	}
 
+	if existingThirdPlace == 0 {
+		if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'third_place')`, losers[0], losers[1]); err != nil {
+			return fmt.Errorf("failed to create third-place match")
+		}
+	}
+	if existingFinals > 0 {
+		return nil
+	}
 	if _, err := tx.Exec(ctx, `insert into matches (pair1_id, pair2_id, round) values ($1, $2, 'final')`, winners[0], winners[1]); err != nil {
 		return fmt.Errorf("failed to create final")
 	}

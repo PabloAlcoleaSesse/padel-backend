@@ -8,8 +8,8 @@ const fallback = {
     { name: "Group A", pairs: [] },
   ],
   results: [],
-  bracket: { semifinals: [], final: null },
-  champions: { champion: null, runner_up: null, final: null },
+  bracket: { semifinals: [], third_place: null, final: null },
+  champions: { champion: null, runner_up: null, third_place: null, final: null, third_place_match: null },
 };
 
 const placeholderPair = {
@@ -43,6 +43,21 @@ function pairLines(name) {
     .filter(Boolean);
 }
 
+function pairInitials(name) {
+  return pairLines(name).map((line) => {
+    const parts = line.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return line;
+    if (parts.length === 1) return `${parts[0][0].toUpperCase()}.`;
+    const first = parts[0][0]?.toUpperCase() || "";
+    const last = parts[parts.length - 1][0]?.toUpperCase() || "";
+    return `${first}. ${last}.`;
+  });
+}
+
+function pairDisplayLines(name, compact = false) {
+  return compact ? pairInitials(name) : pairLines(name);
+}
+
 function scoreLine(match, side) {
   const sets = match?.sets || [];
   return [0, 1, 2]
@@ -65,8 +80,8 @@ function matchCard(match, number, compact = false) {
       <div class="match-meta"><span>${esc(meta)}</span><span>${status}</span></div>
       <div class="match-body">
         <div class="pair-names">
-          <div class="pair-name">${pairLines(pair1.name).map((line) => `<span>${esc(line)}</span>`).join("")}</div>
-          <div class="pair-name">${pairLines(pair2.name).map((line) => `<span>${esc(line)}</span>`).join("")}</div>
+          <div class="pair-name">${pairDisplayLines(pair1.name, compact).map((line) => `<span>${esc(line)}</span>`).join("")}</div>
+          <div class="pair-name">${pairDisplayLines(pair2.name, compact).map((line) => `<span>${esc(line)}</span>`).join("")}</div>
         </div>
         <div class="vs">vs</div>
         <div class="score-lines">
@@ -93,7 +108,7 @@ function renderGroups(groups) {
             <span>#</span><span>PAREJA</span><span>PJ</span><span>PG</span><span>PP</span><span>SETS</span><span class="pts">PTS</span>
           </div>
           ${pairs.map((pair, index) => `
-            <div class="group-row ${index > 1 ? "eliminated" : ""}">
+            <div class="group-row ${index === 2 || index === 3 ? "warning" : index > 3 ? "eliminated" : ""}">
               <span>${String(index + 1).padStart(2, "0")}</span>
               <strong>${esc(pair.name)}</strong>
               <span>${pair.pj ?? 0}</span>
@@ -129,12 +144,14 @@ function renderResults(results) {
 function renderBracket(bracket) {
   const root = document.getElementById("bracket-grid");
   const semis = bracket?.semifinals || [];
+  const thirdPlace = bracket?.third_place;
   const final = bracket?.final;
   root.innerHTML = `
     <div class="bracket-column">
       ${(semis.length ? semis : [null, null]).map((match, index) => matchCard(match, index + 1, true)).join("")}
     </div>
     <div class="bracket-column">
+      ${matchCard(thirdPlace ? { ...thirdPlace, group_name: "3º y 4º" } : { group_name: "3º y 4º", pair1: { name: "X. XXX · X. XXX" }, pair2: { name: "X. XXX · X. XXX" }, status: "scheduled", sets: [] }, 1, true)}
       ${matchCard(final ? { ...final, group_name: "Final" } : { group_name: "Final", pair1: { name: "X. XXX · X. XXX" }, pair2: { name: "X. XXX · X. XXX" }, status: "scheduled", sets: [] }, 1, true).replace("bracket-card", "bracket-card final")}
     </div>
   `;
@@ -148,6 +165,7 @@ function renderChampions(champions) {
   const root = document.getElementById("podium-grid");
   const champion = champions?.champion;
   const runnerUp = champions?.runner_up;
+  const thirdPlace = champions?.third_place;
   root.innerHTML = `
     <article class="podium-card">
       <div class="podium-label">2ª POSICIÓN</div>
@@ -159,7 +177,7 @@ function renderChampions(champions) {
     </article>
     <article class="podium-card">
       <div class="podium-label">3ª POSICIÓN</div>
-      <div class="podium-name">${podiumName(null)}</div>
+      <div class="podium-name">${podiumName(thirdPlace)}</div>
     </article>
   `;
 }
@@ -179,4 +197,5 @@ renderGroups(data.groups || []);
 renderResults(data.results || []);
 renderBracket(data.bracket || fallback.bracket);
 renderChampions(data.champions || fallback.champions);
-document.getElementById("tournament-status").textContent = data.champions?.champion ? "Finalizado" : "Fase de Grupos";
+document.getElementById("tournament-status").textContent =
+  data.champions?.champion && data.champions?.third_place ? "Finalizado" : "Fase de Grupos";
